@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,34 +117,5 @@ private fun formatFrequency(freq: Int): String {
     return when {
         freq >= 1000 -> "${freq / 1000}k"
         else -> "$freq"
-    }
-}
-
-@Composable
-private fun Modifier.graphicsLayer(block: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit): Modifier {
-    return androidx.compose.ui.draw.drawWithContent {
-        val scope = object : androidx.compose.ui.graphics.GraphicsLayerScope {
-            override var alpha: Float = 1f
-            override var scaleX: Float = 1f
-            override var scaleY: Float = 1f
-            override var translationX: Float = 0f
-            override var translationY: Float = 0f
-            override var shadowElevation: Float = 0f
-            override var rotationX: Float = 0f
-            override var rotationY: Float = 0f
-            override var rotationZ: Float = 0f
-            override var cameraDistance: Float = 8f
-            override var transformOrigin: androidx.compose.ui.graphics.TransformOrigin = 
-                androidx.compose.ui.graphics.TransformOrigin.Center
-            override var shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape
-            override var clip: Boolean = false
-            override var renderEffect: androidx.compose.ui.graphics.RenderEffect? = null
-            override var ambientShadowColor: Color = Color.Black
-            override var spotShadowColor: Color = Color.Black
-            override var compositingStrategy: androidx.compose.ui.graphics.CompositingStrategy =
-                androidx.compose.ui.graphics.CompositingStrategy.Auto
-        }
-        scope.block()
-        drawContent()
     }
 }
