@@ -162,40 +162,35 @@ class AudioVisualizer {
         val binFrequency = currentSamplingRate.toFloat() / CAPTURE_SIZE
         val minSubBassFreq = 20f
         val maxSubBassFreq = 100f
-        var minBin = kotlin.math.ceil(minSubBassFreq / binFrequency).toInt().coerceAtLeast(1)
-        var maxBin = kotlin.math.floor(maxSubBassFreq / binFrequency).toInt()
         
-        minBin = minBin.coerceAtMost(magnitudes.size - 1)
-        maxBin = maxBin.coerceAtMost(magnitudes.size - 1)
-        
-        if (maxBin < minBin || binFrequency == 0f) {
-            minBin = 0
-            maxBin = kotlin.math.min(1, magnitudes.size - 1)
+        val subBassBins = mutableListOf<Pair<Int, Float>>()
+        for (binIndex in 0 until numBins) {
+            val centerFreq = binIndex * binFrequency
+            if (centerFreq >= minSubBassFreq && centerFreq <= maxSubBassFreq) {
+                subBassBins.add(Pair(binIndex, magnitudes[binIndex]))
+            }
         }
         
-        if (maxBin >= minBin && minBin < magnitudes.size) {
-            val subBassRange = maxBin - minBin + 1
-            val subBassMagnitudes = FloatArray(subBassRange) { i ->
-                magnitudes[(minBin + i).coerceIn(0, magnitudes.size - 1)]
-            }
-            
+        if (subBassBins.isEmpty()) {
+            val fallbackBin = kotlin.math.min(1, magnitudes.size - 1)
             for (i in 0 until 64) {
-                if (subBassRange == 1) {
-                    subBassWave[i] = (subBassMagnitudes[0] * 3.0f).coerceIn(0f, 1f)
-                } else {
-                    val position = i * (subBassRange - 1) / 63.0
-                    val lowerIndex = position.toInt().coerceIn(0, subBassRange - 1)
-                    val upperIndex = (lowerIndex + 1).coerceAtMost(subBassRange - 1)
-                    val fraction = (position - lowerIndex).toFloat()
-                    
-                    val interpolatedMagnitude = subBassMagnitudes[lowerIndex] * (1 - fraction) + 
-                                               subBassMagnitudes[upperIndex] * fraction
-                    subBassWave[i] = (interpolatedMagnitude * 3.0f).coerceIn(0f, 1f)
-                }
+                subBassWave[i] = (magnitudes[fallbackBin] * 3.0f).coerceIn(0f, 1f)
+            }
+        } else if (subBassBins.size == 1) {
+            val magnitude = subBassBins[0].second
+            for (i in 0 until 64) {
+                subBassWave[i] = (magnitude * 3.0f).coerceIn(0f, 1f)
             }
         } else {
             for (i in 0 until 64) {
-                subBassWave[i] = 0f
+                val position = i * (subBassBins.size - 1) / 63.0
+                val lowerIndex = position.toInt().coerceIn(0, subBassBins.size - 1)
+                val upperIndex = (lowerIndex + 1).coerceAtMost(subBassBins.size - 1)
+                val fraction = (position - lowerIndex).toFloat()
+                
+                val interpolatedMagnitude = subBassBins[lowerIndex].second * (1 - fraction) + 
+                                           subBassBins[upperIndex].second * fraction
+                subBassWave[i] = (interpolatedMagnitude * 3.0f).coerceIn(0f, 1f)
             }
         }
         
