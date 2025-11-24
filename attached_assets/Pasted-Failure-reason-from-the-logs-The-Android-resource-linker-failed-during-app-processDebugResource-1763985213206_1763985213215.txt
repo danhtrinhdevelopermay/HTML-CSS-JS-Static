@@ -1,0 +1,65 @@
+Failure reason (from the logs)
+- The Android resource linker failed during :app:processDebugResources.
+- Error: mipmap-anydpi-v26/ic_launcher.xml and ic_launcher_round.xml reference mipmap/ic_launcher_foreground which does not exist:
+  com.equalizerfx.app-main-63:/mipmap-anydpi-v26/ic_launcher.xml:4: error: resource mipmap/ic_launcher_foreground ... not found.
+
+What to do (short)
+- Add the missing resource named ic_launcher_foreground, or change the launcher XMLs to reference an existing resource name. The easiest / recommended fix is to add ic_launcher_foreground into your res (mipmap or drawable) so the adaptive launcher icons can be linked.
+
+Where to edit in your repo
+- Workflow that ran: .github/workflows/build.yml (see run ref 422e28ca13fe686901db2660eddb069253a93164)
+  https://github.com/danhtrinhdevelopermay/HTML-CSS-JS-Static/blob/422e28ca13fe686901db2660eddb069253a93164/.github/workflows/build.yml
+
+Suggested fixes (apply one)
+
+1) Add a foreground resource file (recommended)
+- Create a foreground resource named ic_launcher_foreground. You can add a raster PNG to mipmap or a vector drawable. Example paths:
+  - app/src/main/res/mipmap/ic_launcher_foreground.png
+  - or app/src/main/res/drawable/ic_launcher_foreground.xml
+
+Example (vector drawable) — create app/src/main/res/drawable/ic_launcher_foreground.xml:
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Put your foreground path(s) here. Replace with your actual icon paths. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,6 L98,102 L10,102 Z" />
+</vector>
+
+Notes:
+- Name the file ic_launcher_foreground.xml (resource name ic_launcher_foreground).
+- If your launcher XMLs expect @mipmap/ic_launcher_foreground, you can place the file in res/mipmap (PNG) or use @drawable/ic_launcher_foreground by editing the launcher XMLs (next option).
+
+2) Edit the adaptive icon XMLs to point to an available resource name
+- If you already have a foreground file under drawable with a different name, change app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml and ic_launcher_round.xml to reference the actual resource name (or move the resource to mipmap with the expected name).
+
+Example adaptive icon XML (app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml):
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>
+
+If you change foreground reference to @drawable/..., ensure that resource exists at app/src/main/res/drawable/ic_launcher_foreground.xml (or PNG in drawable-...).
+
+3) Add PNG assets if you prefer raster images
+- Add appropriate size PNGs under mipmap-*/ic_launcher_foreground.png and mipmap-anydpi-v26/ic_launcher.xml can keep referencing @mipmap/ic_launcher_foreground.
+
+How to validate locally before pushing
+- Run Gradle resource linking with more info so errors are visible:
+  ./gradlew app:assembleDebug --stacktrace --info
+- After making the resource changes, commit and push; CI should pass.
+
+Code example commit summary (what you would add)
+- app/src/main/res/drawable/ic_launcher_foreground.xml (vector shown above)
+- app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml (ensure foreground uses @drawable/ic_launcher_foreground or add a mipmap with the same name)
+
+Why this fixes it
+- The build fails because ic_launcher.xml (adaptive icon) references a foreground resource that doesn’t exist in res. Adding the resource or pointing to the correct existing resource resolves resource linking.
+
+If you want, I can:
+- Inspect the current launcher files in your repo and produce exact diffs. (I will need permission to read those files — tell me which files you want me to open, or I can fetch common locations such as app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml and app/src/main/res/mipmap/ic_launcher_foreground.* using the run ref 422e28ca13fe686901db2660eddb069253a93164.)
