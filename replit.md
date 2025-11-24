@@ -60,9 +60,20 @@ app/src/main/java/com/equalizerfx/app/
 - Implement 20-band equalizer với virtual bands
 - Thêm 4 loại visualizer (waveform, bass, treble, frequency)
 - Implement 3D và 8D audio effects
+- Implement dual-mode: File Playback (default) và System Audio (root only)
+- Thêm auto-fallback khi System Audio mode fails (SecurityException)
+- Thêm user feedback với toast messages
 
 ## Ghi chú kỹ thuật
 - Sử dụng Android Audio Framework native (audiofx)
 - Virtual bands để đạt 20 bands (hardware thường chỉ hỗ trợ 5-10 bands)
 - 8D effect được implement bằng circular panning algorithm
 - Visualizer sử dụng FFT data cho frequency analysis
+- Default mode: FILE_PLAYBACK (hoạt động trên mọi thiết bị)
+- System Audio mode chỉ hoạt động trên thiết bị root/custom ROM do Android security restrictions
+
+## Giới hạn Android Security
+- System Audio mode (session 0) yêu cầu MODIFY_AUDIO_ROUTING permission
+- Permission này chỉ cấp cho system apps hoặc apps signed với platform key
+- File Playback mode hoạt động trên tất cả thiết bị Android (non-root)
+- Xem SYSTEM_AUDIO_GUIDE.md cho hướng dẫn chi tiết về root/custom ROM
