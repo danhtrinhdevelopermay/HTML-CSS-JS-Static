@@ -1,0 +1,249 @@
+package com.equalizerfx.app.audio
+
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import android.media.audiofx.BassBoost
+import android.media.audiofx.Equalizer
+import android.media.audiofx.PresetReverb
+import android.media.audiofx.Virtualizer
+import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.PI
+
+class AudioEngine(private val audioSessionId: Int) {
+    private var equalizer: Equalizer? = null
+    private var bassBoost: BassBoost? = null
+    private var virtualizer: Virtualizer? = null
+    private var presetReverb: PresetReverb? = null
+    
+    private val _equalizerBands = MutableStateFlow<List<EqualizerBand>>(emptyList())
+    val equalizerBands: StateFlow<List<EqualizerBand>> = _equalizerBands
+    
+    private val _bassBoostLevel = MutableStateFlow(0)
+    val bassBoostLevel: StateFlow<Int> = _bassBoostLevel
+    
+    private val _trebleBoostLevel = MutableStateFlow(0)
+    val trebleBoostLevel: StateFlow<Int> = _trebleBoostLevel
+    
+    private val _reverbLevel = MutableStateFlow(0)
+    val reverbLevel: StateFlow<Int> = _reverbLevel
+    
+    private val _effect3DLevel = MutableStateFlow(0)
+    val effect3DLevel: StateFlow<Int> = _effect3DLevel
+    
+    private val _effect8DEnabled = MutableStateFlow(false)
+    val effect8DEnabled: StateFlow<Boolean> = _effect8DEnabled
+    
+    private var effect8DAngle = 0f
+    
+    companion object {
+        private const val TAG = "AudioEngine"
+        const val MAX_BASS_BOOST = 1000
+        const val MAX_VIRTUALIZER = 1000
+    }
+    
+    init {
+        initializeEffects()
+    }
+    
+    private fun initializeEffects() {
+        try {
+            equalizer = Equalizer(0, audioSessionId).apply {
+                enabled = true
+                
+                val numBands = numberOfBands.toInt()
+                val bands = mutableListOf<EqualizerBand>()
+                
+                for (i in 0 until numBands) {
+                    val freq = getCenterFreq(i.toShort())
+                    val freqRange = getBandFreqRange(i.toShort())
+                    bands.add(
+                        EqualizerBand(
+                            index = i,
+                            frequency = freq / 1000,
+                            minFreq = freqRange[0] / 1000,
+                            maxFreq = freqRange[1] / 1000,
+                            level = 0
+                        )
+                    )
+                }
+                
+                val additionalBands = createAdditionalBands(numBands, bands)
+                _equalizerBands.value = bands + additionalBands
+            }
+            
+            bassBoost = BassBoost(0, audioSessionId).apply {
+                enabled = true
+            }
+            
+            virtualizer = Virtualizer(0, audioSessionId).apply {
+                enabled = true
+            }
+            
+            presetReverb = PresetReverb(0, audioSessionId).apply {
+                enabled = true
+                preset = PresetReverb.PRESET_NONE
+            }
+            
+            Log.d(TAG, "Audio effects initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing audio effects", e)
+        }
+    }
+    
+    private fun createAdditionalBands(existingCount: Int, existingBands: List<EqualizerBand>): List<EqualizerBand> {
+        val targetBands = 20
+        val additionalCount = targetBands - existingCount
+        if (additionalCount <= 0) return emptyList()
+        
+        val additionalBands = mutableListOf<EqualizerBand>()
+        val frequencies = listOf(
+            31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+            100, 200, 400, 800, 1600, 3200, 6400, 12800, 20000, 25000
+        )
+        
+        val usedFreqs = existingBands.map { it.frequency }.toSet()
+        val availableFreqs = frequencies.filter { it !in usedFreqs }
+        
+        for (i in 0 until additionalCount.coerceAtMost(availableFreqs.size)) {
+            additionalBands.add(
+                EqualizerBand(
+                    index = existingCount + i,
+                    frequency = availableFreqs[i],
+                    minFreq = availableFreqs[i] - 50,
+                    maxFreq = availableFreqs[i] + 50,
+                    level = 0,
+                    isVirtual = true
+                )
+            )
+        }
+        
+        return additionalBands
+    }
+    
+    fun setBandLevel(bandIndex: Int, level: Int) {
+        try {
+            val bands = _equalizerBands.value.toMutableList()
+            if (bandIndex < bands.size) {
+                val band = bands[bandIndex]
+                bands[bandIndex] = band.copy(level = level)
+                _equalizerBands.value = bands
+                
+                if (!band.isVirtual && equalizer != null) {
+                    equalizer?.setBandLevel(bandIndex.toShort(), level.toShort())
+                }
+                
+                updateTrebleFromBands()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting band level", e)
+        }
+    }
+    
+    private fun updateTrebleFromBands() {
+        val bands = _equalizerBands.value
+        val trebleBands = bands.filter { it.frequency >= 4000 }
+        if (trebleBands.isNotEmpty()) {
+            val avgTreble = trebleBands.map { it.level }.average().toInt()
+            _trebleBoostLevel.value = avgTreble
+        }
+    }
+    
+    fun setBassBoost(level: Int) {
+        try {
+            val clampedLevel = level.coerceIn(0, MAX_BASS_BOOST)
+            bassBoost?.setStrength(clampedLevel.toShort())
+            _bassBoostLevel.value = clampedLevel
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting bass boost", e)
+        }
+    }
+    
+    fun setTrebleBoost(level: Int) {
+        _trebleBoostLevel.value = level
+        
+        val bands = _equalizerBands.value
+        val trebleBandIndices = bands.filter { it.frequency >= 4000 }.map { it.index }
+        
+        trebleBandIndices.forEach { index ->
+            setBandLevel(index, level)
+        }
+    }
+    
+    fun setReverb(level: Int) {
+        try {
+            _reverbLevel.value = level
+            val preset = when {
+                level == 0 -> PresetReverb.PRESET_NONE
+                level < 25 -> PresetReverb.PRESET_SMALLROOM
+                level < 50 -> PresetReverb.PRESET_MEDIUMROOM
+                level < 75 -> PresetReverb.PRESET_LARGEROOM
+                else -> PresetReverb.PRESET_PLATE
+            }
+            presetReverb?.preset = preset.toShort()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting reverb", e)
+        }
+    }
+    
+    fun set3DEffect(level: Int) {
+        try {
+            val clampedLevel = level.coerceIn(0, MAX_VIRTUALIZER)
+            virtualizer?.setStrength(clampedLevel.toShort())
+            _effect3DLevel.value = clampedLevel
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting 3D effect", e)
+        }
+    }
+    
+    fun set8DEffect(enabled: Boolean) {
+        _effect8DEnabled.value = enabled
+        if (enabled) {
+            effect8DAngle = 0f
+        }
+    }
+    
+    fun process8DAudio(audioData: ShortArray): ShortArray {
+        if (!_effect8DEnabled.value) return audioData
+        
+        effect8DAngle += 0.1f
+        if (effect8DAngle > 2 * PI) effect8DAngle -= (2 * PI).toFloat()
+        
+        val processed = ShortArray(audioData.size)
+        val leftGain = (cos(effect8DAngle) + 1) / 2
+        val rightGain = (sin(effect8DAngle) + 1) / 2
+        
+        for (i in audioData.indices step 2) {
+            if (i + 1 < audioData.size) {
+                processed[i] = (audioData[i] * leftGain).toInt().toShort()
+                processed[i + 1] = (audioData[i + 1] * rightGain).toInt().toShort()
+            }
+        }
+        
+        return processed
+    }
+    
+    fun release() {
+        try {
+            equalizer?.release()
+            bassBoost?.release()
+            virtualizer?.release()
+            presetReverb?.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing audio effects", e)
+        }
+    }
+}
+
+data class EqualizerBand(
+    val index: Int,
+    val frequency: Int,
+    val minFreq: Int,
+    val maxFreq: Int,
+    val level: Int,
+    val isVirtual: Boolean = false
+)
