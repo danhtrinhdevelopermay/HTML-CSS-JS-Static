@@ -10,9 +10,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 
@@ -22,6 +24,7 @@ fun VisualizerView(
     bassLevels: FloatArray,
     trebleLevels: FloatArray,
     frequencyBands: FloatArray,
+    subBassWave: FloatArray,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -38,6 +41,19 @@ fun VisualizerView(
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White,
                 modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            Text(
+                text = "SUB-BASS WAVE (20Hz - 100Hz)",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00BCD4)
+            )
+            SubBassWaveVisualizer(
+                subBassWave = subBassWave,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .padding(bottom = 12.dp)
             )
             
             WaveformVisualizer(
@@ -77,7 +93,7 @@ fun VisualizerView(
             )
             
             Text(
-                text = "FREQUENCY BANDS",
+                text = "FREQUENCY BANDS (20Hz - 20kHz)",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray
             )
@@ -218,6 +234,137 @@ private fun smoothBars(newLevels: FloatArray, oldLevels: FloatArray): FloatArray
             oldLevels[i] + (newLevels[i] - oldLevels[i]) * smoothFactor
         } else {
             newLevels[i]
+        }
+    }
+}
+
+@Composable
+fun SubBassWaveVisualizer(
+    subBassWave: FloatArray,
+    modifier: Modifier = Modifier
+) {
+    var smoothedWave by remember { mutableStateOf(subBassWave) }
+    var phase by remember { mutableStateOf(0f) }
+    
+    LaunchedEffect(subBassWave) {
+        smoothedWave = smoothSubBassWave(subBassWave, smoothedWave)
+    }
+    
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(16)
+            phase += 0.05f
+            if (phase > 2 * kotlin.math.PI) {
+                phase -= (2 * kotlin.math.PI).toFloat()
+            }
+        }
+    }
+    
+    Canvas(modifier = modifier.background(Color(0xFF0A0A0A))) {
+        if (smoothedWave.isEmpty()) return@Canvas
+        
+        val width = size.width
+        val height = size.height
+        val centerY = height / 2
+        
+        val avgAmplitude = smoothedWave.average().toFloat()
+        
+        for (layer in 0 until 3) {
+            val path = Path()
+            val step = width / smoothedWave.size
+            val layerOffset = layer * 15f
+            val layerAlpha = 1f - (layer * 0.25f)
+            
+            path.moveTo(0f, centerY)
+            
+            for (i in smoothedWave.indices) {
+                val x = i * step
+                val baseAmplitude = smoothedWave[i] * height * 0.4f
+                val waveOffset = kotlin.math.sin((i * 0.2f + phase + layer * 0.5f).toDouble()).toFloat() * 20f
+                val y1 = centerY - baseAmplitude - layerOffset + waveOffset
+                val y2 = centerY + baseAmplitude + layerOffset - waveOffset
+                
+                if (i == 0) {
+                    path.moveTo(x, y1)
+                } else {
+                    val prevX = (i - 1) * step
+                    val prevAmplitude = smoothedWave[i - 1] * height * 0.4f
+                    val prevWaveOffset = kotlin.math.sin(((i - 1) * 0.2f + phase + layer * 0.5f).toDouble()).toFloat() * 20f
+                    val prevY1 = centerY - prevAmplitude - layerOffset + prevWaveOffset
+                    val controlX = (prevX + x) / 2
+                    path.quadraticBezierTo(controlX, prevY1, x, y1)
+                }
+            }
+            
+            for (i in smoothedWave.indices.reversed()) {
+                val x = i * step
+                val baseAmplitude = smoothedWave[i] * height * 0.4f
+                val waveOffset = kotlin.math.sin((i * 0.2f + phase + layer * 0.5f).toDouble()).toFloat() * 20f
+                val y2 = centerY + baseAmplitude + layerOffset - waveOffset
+                
+                if (i == smoothedWave.size - 1) {
+                    path.lineTo(x, y2)
+                } else {
+                    val nextX = (i + 1) * step
+                    val nextAmplitude = smoothedWave[i + 1] * height * 0.4f
+                    val nextWaveOffset = kotlin.math.sin(((i + 1) * 0.2f + phase + layer * 0.5f).toDouble()).toFloat() * 20f
+                    val nextY2 = centerY + nextAmplitude + layerOffset - nextWaveOffset
+                    val controlX = (x + nextX) / 2
+                    path.quadraticBezierTo(controlX, nextY2, x, y2)
+                }
+            }
+            
+            path.close()
+            
+            val gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF1E88E5).copy(alpha = 0.6f * layerAlpha),
+                    Color(0xFF00BCD4).copy(alpha = 0.4f * layerAlpha),
+                    Color(0xFF1E88E5).copy(alpha = 0.3f * layerAlpha)
+                )
+            )
+            
+            drawPath(
+                path = path,
+                brush = gradient,
+                alpha = layerAlpha
+            )
+            
+            if (layer == 0 && avgAmplitude > 0.3f) {
+                drawPath(
+                    path = path,
+                    color = Color(0xFF00BCD4).copy(alpha = 0.2f),
+                    style = Stroke(width = 2f),
+                    alpha = (avgAmplitude - 0.3f) * 2f
+                )
+            }
+        }
+        
+        if (avgAmplitude > 0.5f) {
+            val pulseRadius = 40f + (avgAmplitude * 60f)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00BCD4).copy(alpha = 0.4f),
+                        Color.Transparent
+                    ),
+                    center = Offset(width / 2, centerY),
+                    radius = pulseRadius
+                ),
+                center = Offset(width / 2, centerY),
+                radius = pulseRadius
+            )
+        }
+    }
+}
+
+private fun smoothSubBassWave(newWave: FloatArray, oldWave: FloatArray): FloatArray {
+    val smoothFactor = 0.35f
+    return FloatArray(newWave.size) { i ->
+        if (i < oldWave.size) {
+            oldWave[i] + (newWave[i] - oldWave[i]) * smoothFactor
+        } else {
+            newWave[i]
         }
     }
 }

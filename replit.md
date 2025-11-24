@@ -18,12 +18,14 @@
 5. **3D Effect**: Virtualizer cho âm thanh 3D
 6. **8D Effect**: Hiệu ứng âm thanh xoay vòng
 7. **Audio Visualizer**: 
+   - **Sub-Bass Wave (20-100Hz)**: 3-layer animated wave với phase shifting
    - Waveform visualization with smooth bezier curves
    - Bass bars (10 bands) with gradient colors and glow effects
    - Treble bars (10 bands)
-   - Frequency bands (20 bands)
+   - Frequency bands (20 bands, 20Hz-20kHz full spectrum)
    - Enhanced bass sensitivity (2.2x boost)
    - Smooth interpolation animations
+   - Real-time radial pulse effects
 8. **Image Pulse Visualizer**: Upload hình ảnh và xem nó pulse theo bass level
    - Scale effects (1.0x to 1.4x) synced với bass rhythm
    - Radial glow effects when bass is strong
@@ -76,6 +78,12 @@ app/src/main/java/com/equalizerfx/app/
   - Waveform: Smooth bezier curves với gradient coloring
   - Bass sensitivity: 2.2x boost với frequency averaging
   - Image Pulse Visualizer: Upload images với bass-synced pulse effects
+- **Advanced Frequency Coverage & Sub-Bass Wave** (2025-11-24):
+  - 20 bands logarithmic distribution từ 20Hz đến 20kHz (full human hearing range)
+  - Sub-Bass Wave Visualizer: 3-layer animated wave effect cho tần số 20-100Hz
+  - Smooth bezier curves với phase animation
+  - Radial pulse effect khi sub-bass mạnh
+  - Real-time FFT processing cho sub-bass frequencies
 
 ## Ghi chú kỹ thuật
 - Sử dụng Android Audio Framework native (audiofx)

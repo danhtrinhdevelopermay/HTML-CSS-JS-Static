@@ -10,6 +10,7 @@ import kotlin.math.sqrt
 class AudioVisualizer {
     private var visualizer: Visualizer? = null
     private var currentSessionId: Int = -1
+    private var currentSamplingRate: Int = 44100
     
     private val _initializationFailed = MutableStateFlow(false)
     val initializationFailed: StateFlow<Boolean> = _initializationFailed
@@ -81,6 +82,9 @@ class AudioVisualizer {
                             fft: ByteArray?,
                             samplingRate: Int
                         ) {
+                            if (samplingRate > 0) {
+                                currentSamplingRate = samplingRate
+                            }
                             fft?.let { processFft(it) }
                         }
                     },
@@ -111,13 +115,14 @@ class AudioVisualizer {
     }
     
     private fun processFft(fft: ByteArray) {
-        val magnitudes = FloatArray(128)
+        val numBins = kotlin.math.min(fft.size / 2, 512)
+        val magnitudes = FloatArray(numBins)
         val bassLevels = FloatArray(10)
         val trebleLevels = FloatArray(10)
         val frequencyBands = FloatArray(20)
         val subBassWave = FloatArray(64)
         
-        for (i in 0 until 128) {
+        for (i in 0 until numBins) {
             val rfk = fft[2 * i].toInt()
             val ifk = fft[2 * i + 1].toInt()
             val magnitude = sqrt((rfk * rfk + ifk * ifk).toFloat())
@@ -129,9 +134,10 @@ class AudioVisualizer {
             magnitudes[i] = (magnitudes[i] / maxMagnitude).coerceIn(0f, 1f)
         }
         
+        val bassIndexRange = (numBins * 0.1).toInt().coerceAtLeast(10)
         for (i in 0 until 10) {
-            val startIndex = (i * 6).coerceIn(0, 127)
-            val endIndex = ((i + 1) * 6).coerceIn(0, 127)
+            val startIndex = (i * bassIndexRange / 10).coerceIn(0, numBins - 1)
+            val endIndex = ((i + 1) * bassIndexRange / 10).coerceIn(0, numBins - 1)
             var sum = 0f
             var count = 0
             for (j in startIndex until endIndex) {
@@ -142,20 +148,55 @@ class AudioVisualizer {
             bassLevels[i] = (avgLevel * 2.2f).coerceIn(0f, 1f)
         }
         
+        val trebleStart = (numBins * 0.5).toInt()
         for (i in 0 until 10) {
-            val index = (64 + i * 6.4).toInt().coerceIn(0, 127)
+            val index = (trebleStart + i * (numBins - trebleStart) / 10).coerceIn(0, numBins - 1)
             trebleLevels[i] = (magnitudes[index] * 1.3f).coerceIn(0f, 1f)
         }
         
         for (i in 0 until 20) {
-            val index = (i * 6.4).toInt().coerceIn(0, 127)
+            val index = (i * numBins / 20).coerceIn(0, numBins - 1)
             frequencyBands[i] = (magnitudes[index] * 1.4f).coerceIn(0f, 1f)
         }
         
-        for (i in 0 until 64) {
-            val fftIndex = (i * 0.5).toInt().coerceIn(0, 15)
-            val magnitude = magnitudes[fftIndex]
-            subBassWave[i] = (magnitude * 3.0f).coerceIn(0f, 1f)
+        val binFrequency = currentSamplingRate.toFloat() / CAPTURE_SIZE
+        val minSubBassFreq = 20f
+        val maxSubBassFreq = 100f
+        var minBin = kotlin.math.ceil(minSubBassFreq / binFrequency).toInt().coerceAtLeast(1)
+        var maxBin = kotlin.math.floor(maxSubBassFreq / binFrequency).toInt()
+        
+        minBin = minBin.coerceAtMost(magnitudes.size - 1)
+        maxBin = maxBin.coerceAtMost(magnitudes.size - 1)
+        
+        if (maxBin < minBin || binFrequency == 0f) {
+            minBin = 0
+            maxBin = kotlin.math.min(1, magnitudes.size - 1)
+        }
+        
+        if (maxBin >= minBin && minBin < magnitudes.size) {
+            val subBassRange = maxBin - minBin + 1
+            val subBassMagnitudes = FloatArray(subBassRange) { i ->
+                magnitudes[(minBin + i).coerceIn(0, magnitudes.size - 1)]
+            }
+            
+            for (i in 0 until 64) {
+                if (subBassRange == 1) {
+                    subBassWave[i] = (subBassMagnitudes[0] * 3.0f).coerceIn(0f, 1f)
+                } else {
+                    val position = i * (subBassRange - 1) / 63.0
+                    val lowerIndex = position.toInt().coerceIn(0, subBassRange - 1)
+                    val upperIndex = (lowerIndex + 1).coerceAtMost(subBassRange - 1)
+                    val fraction = (position - lowerIndex).toFloat()
+                    
+                    val interpolatedMagnitude = subBassMagnitudes[lowerIndex] * (1 - fraction) + 
+                                               subBassMagnitudes[upperIndex] * fraction
+                    subBassWave[i] = (interpolatedMagnitude * 3.0f).coerceIn(0f, 1f)
+                }
+            }
+        } else {
+            for (i in 0 until 64) {
+                subBassWave[i] = 0f
+            }
         }
         
         _fftData.value = magnitudes

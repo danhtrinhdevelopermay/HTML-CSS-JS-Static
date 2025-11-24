@@ -152,6 +152,7 @@ fun MainScreen(
     val bassLevels by audioVisualizer.bassLevels.collectAsState()
     val trebleLevels by audioVisualizer.trebleLevels.collectAsState()
     val frequencyBands by audioVisualizer.frequencyBands.collectAsState()
+    val subBassWave by audioVisualizer.subBassWave.collectAsState()
     
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     
@@ -236,7 +237,8 @@ fun MainScreen(
                 waveformData = waveformData,
                 bassLevels = bassLevels,
                 trebleLevels = trebleLevels,
-                frequencyBands = frequencyBands
+                frequencyBands = frequencyBands,
+                subBassWave = subBassWave
             )
             
             ImagePulseVisualizer(

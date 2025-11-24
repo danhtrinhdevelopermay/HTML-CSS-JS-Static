@@ -174,11 +174,18 @@ class AudioEngine {
     }
     
     private fun generate20BandFrequencies(): List<Int> {
-        return listOf(
-            20, 25, 31, 40, 50, 63, 80, 100, 125, 160,
-            200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
-            2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000
-        ).take(20)
+        return generateLogarithmicFrequencies(20, 20, 20000)
+    }
+    
+    private fun generateLogarithmicFrequencies(count: Int, minFreq: Int, maxFreq: Int): List<Int> {
+        val logMin = kotlin.math.ln(minFreq.toDouble())
+        val logMax = kotlin.math.ln(maxFreq.toDouble())
+        val step = (logMax - logMin) / (count - 1)
+        
+        return (0 until count).map { i ->
+            val freq = kotlin.math.exp(logMin + i * step)
+            if (i == count - 1) maxFreq else freq.toInt().coerceIn(minFreq, maxFreq)
+        }
     }
     
     private fun calculateBandwidth(centerFreq: Int): Int {
