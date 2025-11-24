@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.equalizerfx.app.audio.AudioMode
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioModeSelector(
     currentMode: AudioMode,
