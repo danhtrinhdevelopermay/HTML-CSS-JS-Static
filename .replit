@@ -1,2 +1,25 @@
 [agent]
 expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Verify Build"
+
+[[workflows.workflow]]
+name = "Verify Build"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash verify-build.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"

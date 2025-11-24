@@ -7,8 +7,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-class AudioVisualizer(private val audioSessionId: Int) {
+class AudioVisualizer {
     private var visualizer: Visualizer? = null
+    private var currentSessionId: Int = -1
+    
+    private val _initializationFailed = MutableStateFlow(false)
+    val initializationFailed: StateFlow<Boolean> = _initializationFailed
     
     private val _waveformData = MutableStateFlow<FloatArray>(FloatArray(128))
     val waveformData: StateFlow<FloatArray> = _waveformData
@@ -31,12 +35,33 @@ class AudioVisualizer(private val audioSessionId: Int) {
     }
     
     init {
-        initializeVisualizer()
+        
     }
     
-    private fun initializeVisualizer() {
+    fun switchSession(sessionId: Int) {
+        if (sessionId == 0 || sessionId == AudioEngine.SYSTEM_AUDIO_SESSION) {
+            if (sessionId == AudioEngine.SYSTEM_AUDIO_SESSION) {
+                Log.w(TAG, "Attempting system audio visualizer - may require root")
+            } else {
+                Log.w(TAG, "Invalid session ID for visualizer. Waiting...")
+                return
+            }
+        }
+        
+        if (sessionId != currentSessionId) {
+            releaseVisualizer()
+            initializeVisualizer(sessionId)
+        }
+    }
+    
+    private fun initializeVisualizer(sessionId: Int) {
+        currentSessionId = sessionId
         try {
-            visualizer = Visualizer(audioSessionId).apply {
+            if (sessionId == AudioEngine.SYSTEM_AUDIO_SESSION) {
+                Log.w(TAG, "Attempting to attach visualizer to system audio (session 0). This requires root/system permissions.")
+            }
+            
+            visualizer = Visualizer(sessionId).apply {
                 captureSize = CAPTURE_SIZE
                 setDataCaptureListener(
                     object : Visualizer.OnDataCaptureListener {
@@ -62,9 +87,15 @@ class AudioVisualizer(private val audioSessionId: Int) {
                 )
                 enabled = true
             }
-            Log.d(TAG, "Visualizer initialized successfully")
+            Log.d(TAG, "Visualizer initialized successfully for session $sessionId")
+            _initializationFailed.value = false
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException: Cannot attach visualizer to session $sessionId. " +
+                    "System audio mode requires root/system permissions.", e)
+            _initializationFailed.value = true
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing visualizer", e)
+            Log.e(TAG, "Error initializing visualizer for session $sessionId", e)
+            _initializationFailed.value = true
         }
     }
     
@@ -115,11 +146,17 @@ class AudioVisualizer(private val audioSessionId: Int) {
         _frequencyBands.value = frequencyBands
     }
     
-    fun release() {
+    private fun releaseVisualizer() {
         try {
+            visualizer?.enabled = false
             visualizer?.release()
+            visualizer = null
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing visualizer", e)
         }
+    }
+    
+    fun release() {
+        releaseVisualizer()
     }
 }

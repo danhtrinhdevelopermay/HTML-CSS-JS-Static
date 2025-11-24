@@ -95,60 +95,63 @@ fun MainScreen(
         }
     }
     
+    val audioEngine = remember {
+        AudioEngine().also { onAudioEngineReady(it) }
+    }
+    
+    val audioVisualizer = remember {
+        AudioVisualizer().also { onVisualizerReady(it) }
+    }
+    
     val audioSessionId by remember {
         derivedStateOf { mediaPlayerManager.audioSessionId }
     }
     
-    val audioEngine = remember(audioSessionId) {
-        if (audioSessionId != 0) {
-            AudioEngine(audioSessionId).also { onAudioEngineReady(it) }
-        } else {
-            null
-        }
-    }
-    
-    val audioVisualizer = remember(audioSessionId) {
-        if (audioSessionId != 0) {
-            AudioVisualizer(audioSessionId).also { onVisualizerReady(it) }
-        } else {
-            null
-        }
-    }
-    
+    val currentMode by audioEngine.currentMode.collectAsState()
     val isPlaying by mediaPlayerManager.isPlaying.collectAsState()
     val currentFile by mediaPlayerManager.currentFile.collectAsState()
     
-    val equalizerBands by audioEngine?.equalizerBands?.collectAsState() ?: remember {
-        mutableStateOf(emptyList())
-    }
-    val bassBoostLevel by audioEngine?.bassBoostLevel?.collectAsState() ?: remember {
-        mutableStateOf(0)
-    }
-    val trebleBoostLevel by audioEngine?.trebleBoostLevel?.collectAsState() ?: remember {
-        mutableStateOf(0)
-    }
-    val reverbLevel by audioEngine?.reverbLevel?.collectAsState() ?: remember {
-        mutableStateOf(0)
-    }
-    val effect3DLevel by audioEngine?.effect3DLevel?.collectAsState() ?: remember {
-        mutableStateOf(0)
-    }
-    val effect8DEnabled by audioEngine?.effect8DEnabled?.collectAsState() ?: remember {
-        mutableStateOf(false)
+    val engineInitFailed by audioEngine.initializationFailed.collectAsState()
+    val visualizerInitFailed by audioVisualizer.initializationFailed.collectAsState()
+    
+    LaunchedEffect(audioSessionId, currentMode) {
+        when (currentMode) {
+            com.equalizerfx.app.audio.AudioMode.FILE_PLAYBACK -> {
+                if (audioSessionId != 0) {
+                    audioEngine.switchMode(com.equalizerfx.app.audio.AudioMode.FILE_PLAYBACK, audioSessionId)
+                    audioVisualizer.switchSession(audioSessionId)
+                }
+            }
+            com.equalizerfx.app.audio.AudioMode.SYSTEM_AUDIO -> {
+                if (!engineInitFailed) {
+                    audioEngine.switchMode(com.equalizerfx.app.audio.AudioMode.SYSTEM_AUDIO)
+                    audioVisualizer.switchSession(AudioEngine.SYSTEM_AUDIO_SESSION)
+                }
+            }
+        }
     }
     
-    val waveformData by audioVisualizer?.waveformData?.collectAsState() ?: remember {
-        mutableStateOf(FloatArray(128))
+    LaunchedEffect(engineInitFailed, currentMode) {
+        if (engineInitFailed && currentMode == com.equalizerfx.app.audio.AudioMode.SYSTEM_AUDIO) {
+            android.widget.Toast.makeText(
+                context,
+                "⚠️ System Audio mode requires root permissions. Please use File Playback mode.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
     }
-    val bassLevels by audioVisualizer?.bassLevels?.collectAsState() ?: remember {
-        mutableStateOf(FloatArray(10))
-    }
-    val trebleLevels by audioVisualizer?.trebleLevels?.collectAsState() ?: remember {
-        mutableStateOf(FloatArray(10))
-    }
-    val frequencyBands by audioVisualizer?.frequencyBands?.collectAsState() ?: remember {
-        mutableStateOf(FloatArray(20))
-    }
+    
+    val equalizerBands by audioEngine.equalizerBands.collectAsState()
+    val bassBoostLevel by audioEngine.bassBoostLevel.collectAsState()
+    val trebleBoostLevel by audioEngine.trebleBoostLevel.collectAsState()
+    val reverbLevel by audioEngine.reverbLevel.collectAsState()
+    val effect3DLevel by audioEngine.effect3DLevel.collectAsState()
+    val effect8DEnabled by audioEngine.effect8DEnabled.collectAsState()
+    
+    val waveformData by audioVisualizer.waveformData.collectAsState()
+    val bassLevels by audioVisualizer.bassLevels.collectAsState()
+    val trebleLevels by audioVisualizer.trebleLevels.collectAsState()
+    val frequencyBands by audioVisualizer.frequencyBands.collectAsState()
     
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -174,6 +177,31 @@ fun MainScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 modifier = Modifier.padding(vertical = 8.dp)
+            )
+            
+            AudioModeSelector(
+                currentMode = currentMode,
+                onModeChange = { mode ->
+                    when (mode) {
+                        com.equalizerfx.app.audio.AudioMode.FILE_PLAYBACK -> {
+                            if (audioSessionId != 0) {
+                                audioEngine.switchMode(mode, audioSessionId)
+                                audioVisualizer.switchSession(audioSessionId)
+                            } else {
+                                audioEngine.switchMode(mode, 0)
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Please select an audio file to start playback",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                        com.equalizerfx.app.audio.AudioMode.SYSTEM_AUDIO -> {
+                            audioEngine.switchMode(com.equalizerfx.app.audio.AudioMode.SYSTEM_AUDIO)
+                            audioVisualizer.switchSession(AudioEngine.SYSTEM_AUDIO_SESSION)
+                        }
+                    }
+                }
             )
             
             PlayerControls(
@@ -207,17 +235,17 @@ fun MainScreen(
                 reverbLevel = reverbLevel,
                 effect3DLevel = effect3DLevel,
                 effect8DEnabled = effect8DEnabled,
-                onBassBoostChange = { audioEngine?.setBassBoost(it) },
-                onTrebleBoostChange = { audioEngine?.setTrebleBoost(it) },
-                onReverbChange = { audioEngine?.setReverb(it) },
-                onEffect3DChange = { audioEngine?.set3DEffect(it) },
-                onEffect8DToggle = { audioEngine?.set8DEffect(it) }
+                onBassBoostChange = { audioEngine.setBassBoost(it) },
+                onTrebleBoostChange = { audioEngine.setTrebleBoost(it) },
+                onReverbChange = { audioEngine.setReverb(it) },
+                onEffect3DChange = { audioEngine.set3DEffect(it) },
+                onEffect8DToggle = { audioEngine.set8DEffect(it) }
             )
             
             EqualizerView(
                 bands = equalizerBands,
                 onBandLevelChange = { index, level ->
-                    audioEngine?.setBandLevel(index, level)
+                    audioEngine.setBandLevel(index, level)
                 }
             )
         }

@@ -21,7 +21,18 @@
 ### 🎵 Media Player
 - Phát file MP3, MP4, và các định dạng audio khác
 - Điều chỉnh âm thanh trực tiếp trên file đang phát
-- Hỗ trợ điều chỉnh âm thanh hệ thống (system audio)
+- **2 chế độ hoạt động**:
+  - **File Playback**: Điều chỉnh âm thanh file đang phát trong app
+  - **System Audio** (yêu cầu quyền root/system): Điều chỉnh toàn bộ âm thanh hệ thống
+
+### ⚠️ Lưu ý quan trọng về System Audio Mode
+
+Do giới hạn bảo mật của Android, chế độ **System Audio** (điều chỉnh âm thanh toàn hệ thống) chỉ hoạt động trên:
+- Thiết bị đã root với quyền truy cập system
+- ROM custom có cấp quyền MODIFY_AUDIO_ROUTING
+- Build được ký với platform key
+
+Trên thiết bị Android thông thường (non-root), chỉ có chế độ **File Playback** hoạt động được. Đây là giới hạn của Android platform, không phải lỗi của ứng dụng.
 
 ## Yêu cầu
 
@@ -113,12 +124,27 @@ app/
 
 ## Hướng dẫn sử dụng
 
-1. **Chọn file audio**: Nhấn nút folder để chọn file MP3/MP4
-2. **Phát nhạc**: Nhấn nút Play
-3. **Điều chỉnh Equalizer**: Kéo các thanh trượt 20 band để điều chỉnh âm thanh
-4. **Bass/Treble Boost**: Điều chỉnh mức bass và treble
-5. **Effects**: Bật/tắt các hiệu ứng Reverb, 3D, 8D
-6. **Visualizer**: Xem sóng nhạc và frequency bars real-time
+1. **Chọn chế độ Audio Source**:
+   - **File Playback** (khuyến nghị): Hoạt động trên mọi thiết bị
+   - **System Audio**: Chỉ cho thiết bị root/custom ROM (xem SYSTEM_AUDIO_GUIDE.md)
+
+2. **File Playback Mode**:
+   - Nhấn nút folder để chọn file MP3/MP4
+   - Nhấn Play để phát nhạc
+   - Tất cả effects sẽ áp dụng lên file đang phát
+
+3. **System Audio Mode** (chỉ thiết bị root):
+   - Bật ứng dụng nhạc bất kỳ (YouTube Music, Spotify, etc.)
+   - Phát nhạc từ app đó
+   - Quay lại Equalizer FX và điều chỉnh - effects sẽ áp dụng cho toàn bộ âm thanh hệ thống
+
+4. **Điều chỉnh**:
+   - **Equalizer**: Kéo 20 thanh trượt để điều chỉnh từng dải tần số
+   - **Bass/Treble Boost**: Tăng cường âm trầm/cao
+   - **Reverb**: Thêm hiệu ứng vang
+   - **3D/8D Effects**: Bật hiệu ứng không gian âm thanh
+
+5. **Visualizer**: Xem sóng nhạc real-time (waveform, bass, treble, frequency bands)
 
 ## License
 
