@@ -29,6 +29,9 @@ class AudioVisualizer {
     private val _frequencyBands = MutableStateFlow<FloatArray>(FloatArray(20))
     val frequencyBands: StateFlow<FloatArray> = _frequencyBands
     
+    private val _subBassWave = MutableStateFlow<FloatArray>(FloatArray(64))
+    val subBassWave: StateFlow<FloatArray> = _subBassWave
+    
     companion object {
         private const val TAG = "AudioVisualizer"
         private const val CAPTURE_SIZE = 1024
@@ -112,6 +115,7 @@ class AudioVisualizer {
         val bassLevels = FloatArray(10)
         val trebleLevels = FloatArray(10)
         val frequencyBands = FloatArray(20)
+        val subBassWave = FloatArray(64)
         
         for (i in 0 until 128) {
             val rfk = fft[2 * i].toInt()
@@ -148,10 +152,17 @@ class AudioVisualizer {
             frequencyBands[i] = (magnitudes[index] * 1.4f).coerceIn(0f, 1f)
         }
         
+        for (i in 0 until 64) {
+            val fftIndex = (i * 0.5).toInt().coerceIn(0, 15)
+            val magnitude = magnitudes[fftIndex]
+            subBassWave[i] = (magnitude * 3.0f).coerceIn(0f, 1f)
+        }
+        
         _fftData.value = magnitudes
         _bassLevels.value = bassLevels
         _trebleLevels.value = trebleLevels
         _frequencyBands.value = frequencyBands
+        _subBassWave.value = subBassWave
     }
     
     private fun releaseVisualizer() {

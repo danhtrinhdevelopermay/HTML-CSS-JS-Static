@@ -150,21 +150,20 @@ class AudioEngine {
         if (additionalCount <= 0) return emptyList()
         
         val additionalBands = mutableListOf<EqualizerBand>()
-        val frequencies = listOf(
-            31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
-            100, 200, 400, 800, 1600, 3200, 6400, 12800, 20000, 25000
-        )
+        val frequencies = generate20BandFrequencies()
         
         val usedFreqs = existingBands.map { it.frequency }.toSet()
         val availableFreqs = frequencies.filter { it !in usedFreqs }
         
         for (i in 0 until additionalCount.coerceAtMost(availableFreqs.size)) {
+            val freq = availableFreqs[i]
+            val bandwidth = calculateBandwidth(freq)
             additionalBands.add(
                 EqualizerBand(
                     index = existingCount + i,
-                    frequency = availableFreqs[i],
-                    minFreq = availableFreqs[i] - 50,
-                    maxFreq = availableFreqs[i] + 50,
+                    frequency = freq,
+                    minFreq = (freq - bandwidth / 2).coerceAtLeast(20),
+                    maxFreq = freq + bandwidth / 2,
                     level = 0,
                     isVirtual = true
                 )
@@ -172,6 +171,23 @@ class AudioEngine {
         }
         
         return additionalBands
+    }
+    
+    private fun generate20BandFrequencies(): List<Int> {
+        return listOf(
+            20, 25, 31, 40, 50, 63, 80, 100, 125, 160,
+            200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
+            2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000
+        ).take(20)
+    }
+    
+    private fun calculateBandwidth(centerFreq: Int): Int {
+        return when {
+            centerFreq < 100 -> 20
+            centerFreq < 1000 -> 50
+            centerFreq < 5000 -> 100
+            else -> 200
+        }
     }
     
     fun setBandLevel(bandIndex: Int, level: Int) {
