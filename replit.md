@@ -18,11 +18,18 @@
 5. **3D Effect**: Virtualizer cho âm thanh 3D
 6. **8D Effect**: Hiệu ứng âm thanh xoay vòng
 7. **Audio Visualizer**: 
-   - Waveform visualization
-   - Bass bars (10 bands)
+   - Waveform visualization with smooth bezier curves
+   - Bass bars (10 bands) with gradient colors and glow effects
    - Treble bars (10 bands)
    - Frequency bands (20 bands)
-8. **Media Player**: Phát MP3/MP4 và điều chỉnh âm thanh real-time
+   - Enhanced bass sensitivity (2.2x boost)
+   - Smooth interpolation animations
+8. **Image Pulse Visualizer**: Upload hình ảnh và xem nó pulse theo bass level
+   - Scale effects (1.0x to 1.4x) synced với bass rhythm
+   - Radial glow effects when bass is strong
+   - Smooth spring animations
+   - Real-time bass level indicator
+9. **Media Player**: Phát MP3/MP4 và điều chỉnh âm thanh real-time
 
 ## Cấu trúc code
 ```
@@ -38,6 +45,7 @@ app/src/main/java/com/equalizerfx/app/
 └── ui/components/              # Compose UI components
     ├── EqualizerView.kt
     ├── VisualizerView.kt
+    ├── ImagePulseVisualizer.kt # Image pulse with bass sync
     ├── EffectsControls.kt
     └── PlayerControls.kt
 ```
@@ -63,6 +71,11 @@ app/src/main/java/com/equalizerfx/app/
 - Implement dual-mode: File Playback (default) và System Audio (root only)
 - Thêm auto-fallback khi System Audio mode fails (SecurityException)
 - Thêm user feedback với toast messages
+- **Enhanced visualizers** (2025-11-24):
+  - Bass bars: 1.5x height với gradient colors và glow effects
+  - Waveform: Smooth bezier curves với gradient coloring
+  - Bass sensitivity: 2.2x boost với frequency averaging
+  - Image Pulse Visualizer: Upload images với bass-synced pulse effects
 
 ## Ghi chú kỹ thuật
 - Sử dụng Android Audio Framework native (audiofx)
