@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.equalizerfx.app.settings.PerformanceConfig
 import kotlin.math.pow
 
 @Composable
@@ -28,8 +29,12 @@ fun ImagePulseVisualizer(
     bassLevels: FloatArray,
     selectedImageUri: Uri?,
     onSelectImage: () -> Unit,
+    performanceConfig: PerformanceConfig,
     modifier: Modifier = Modifier
 ) {
+    if (!performanceConfig.enableImagePulse) {
+        return
+    }
     val context = LocalContext.current
     val avgBass = remember(bassLevels) {
         if (bassLevels.isNotEmpty()) {

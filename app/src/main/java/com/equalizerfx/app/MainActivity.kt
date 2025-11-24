@@ -25,6 +25,7 @@ import com.equalizerfx.app.audio.AudioEngine
 import com.equalizerfx.app.audio.AudioVisualizer
 import com.equalizerfx.app.player.MediaPlayerManager
 import com.equalizerfx.app.service.AudioService
+import com.equalizerfx.app.settings.PerformanceSettings
 import com.equalizerfx.app.ui.components.*
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -33,11 +34,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var mediaPlayerManager: MediaPlayerManager
     private lateinit var audioEngine: AudioEngine
     private lateinit var audioVisualizer: AudioVisualizer
+    private lateinit var performanceSettings: PerformanceSettings
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         mediaPlayerManager = MediaPlayerManager(this)
+        performanceSettings = PerformanceSettings(this)
         
         startService(Intent(this, AudioService::class.java))
         
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
             EqualizerFXTheme {
                 MainScreen(
                     mediaPlayerManager = mediaPlayerManager,
+                    performanceSettings = performanceSettings,
                     onAudioEngineReady = { engine ->
                         audioEngine = engine
                     },
@@ -72,10 +76,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(
     mediaPlayerManager: MediaPlayerManager,
+    performanceSettings: PerformanceSettings,
     onAudioEngineReady: (AudioEngine) -> Unit,
     onVisualizerReady: (AudioVisualizer) -> Unit
 ) {
     val context = LocalContext.current
+    
+    val performanceMode by performanceSettings.performanceMode.collectAsState()
+    val performanceConfig by performanceSettings.config.collectAsState()
     
     val permissionsState = rememberMultiplePermissionsState(
         permissions = buildList {
@@ -101,6 +109,10 @@ fun MainScreen(
     
     val audioVisualizer = remember {
         AudioVisualizer().also { onVisualizerReady(it) }
+    }
+    
+    LaunchedEffect(performanceConfig) {
+        audioVisualizer.updatePerformanceConfig(performanceConfig)
     }
     
     val audioSessionId by remember {
@@ -190,6 +202,13 @@ fun MainScreen(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             
+            PerformanceSelector(
+                currentMode = performanceMode,
+                onModeChange = { mode ->
+                    performanceSettings.setPerformanceMode(mode)
+                }
+            )
+            
             AudioModeSelector(
                 currentMode = currentMode,
                 onModeChange = { mode ->
@@ -238,7 +257,8 @@ fun MainScreen(
                 bassLevels = bassLevels,
                 trebleLevels = trebleLevels,
                 frequencyBands = frequencyBands,
-                subBassWave = subBassWave
+                subBassWave = subBassWave,
+                performanceConfig = performanceConfig
             )
             
             ImagePulseVisualizer(
@@ -246,7 +266,8 @@ fun MainScreen(
                 selectedImageUri = selectedImageUri,
                 onSelectImage = {
                     imagePickerLauncher.launch("image/*")
-                }
+                },
+                performanceConfig = performanceConfig
             )
             
             EffectsControls(

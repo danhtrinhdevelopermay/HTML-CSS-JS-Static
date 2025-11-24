@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.equalizerfx.app.settings.PerformanceConfig
 import kotlin.math.abs
 
 @Composable
@@ -25,6 +26,7 @@ fun VisualizerView(
     trebleLevels: FloatArray,
     frequencyBands: FloatArray,
     subBassWave: FloatArray,
+    performanceConfig: PerformanceConfig,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -43,21 +45,25 @@ fun VisualizerView(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             
-            Text(
-                text = "SUB-BASS WAVE (20Hz - 100Hz)",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF00BCD4)
-            )
-            SubBassWaveVisualizer(
-                subBassWave = subBassWave,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .padding(bottom = 12.dp)
-            )
+            if (performanceConfig.enableSubBassWave) {
+                Text(
+                    text = "SUB-BASS WAVE (20Hz - 100Hz)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF00BCD4)
+                )
+                SubBassWaveVisualizer(
+                    subBassWave = subBassWave,
+                    performanceConfig = performanceConfig,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .padding(bottom = 12.dp)
+                )
+            }
             
             WaveformVisualizer(
                 waveformData = waveformData,
+                performanceConfig = performanceConfig,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
@@ -72,6 +78,7 @@ fun VisualizerView(
             BarsVisualizer(
                 levels = bassLevels,
                 color = Color(0xFF00BCD4),
+                performanceConfig = performanceConfig,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp)
@@ -86,6 +93,7 @@ fun VisualizerView(
             BarsVisualizer(
                 levels = trebleLevels,
                 color = Color(0xFFFF5722),
+                performanceConfig = performanceConfig,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp)
@@ -100,6 +108,7 @@ fun VisualizerView(
             BarsVisualizer(
                 levels = frequencyBands,
                 color = Color(0xFF6200EE),
+                performanceConfig = performanceConfig,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
@@ -111,6 +120,7 @@ fun VisualizerView(
 @Composable
 fun WaveformVisualizer(
     waveformData: FloatArray,
+    performanceConfig: PerformanceConfig,
     modifier: Modifier = Modifier
 ) {
     var smoothedData by remember { mutableStateOf(waveformData) }
@@ -175,6 +185,7 @@ private fun smoothWaveform(newData: FloatArray, oldData: FloatArray): FloatArray
 fun BarsVisualizer(
     levels: FloatArray,
     color: Color,
+    performanceConfig: PerformanceConfig,
     modifier: Modifier = Modifier
 ) {
     var smoothedLevels by remember { mutableStateOf(levels) }
@@ -196,31 +207,41 @@ fun BarsVisualizer(
             val x = i * (barWidth + spacing)
             val y = height - barHeight
             
-            val gradient = Brush.verticalGradient(
-                colors = listOf(
-                    color.copy(alpha = 1f),
-                    color.copy(alpha = 0.6f),
-                    color.copy(alpha = 0.3f)
-                ),
-                startY = y,
-                endY = height
-            )
-            
-            drawRoundRect(
-                brush = gradient,
-                topLeft = Offset(x, y),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
-                alpha = 0.95f
-            )
-            
-            if (smoothedLevels[i] > 0.6f) {
+            if (performanceConfig.enableGlowEffects) {
+                val gradient = Brush.verticalGradient(
+                    colors = listOf(
+                        color.copy(alpha = 1f),
+                        color.copy(alpha = 0.6f),
+                        color.copy(alpha = 0.3f)
+                    ),
+                    startY = y,
+                    endY = height
+                )
+                
                 drawRoundRect(
-                    color = color.copy(alpha = 0.3f),
-                    topLeft = Offset(x - 2f, y - 2f),
-                    size = Size(barWidth + 4f, barHeight + 2f),
+                    brush = gradient,
+                    topLeft = Offset(x, y),
+                    size = Size(barWidth, barHeight),
                     cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
-                    alpha = 0.5f
+                    alpha = 0.95f
+                )
+                
+                if (smoothedLevels[i] > 0.6f) {
+                    drawRoundRect(
+                        color = color.copy(alpha = 0.3f),
+                        topLeft = Offset(x - 2f, y - 2f),
+                        size = Size(barWidth + 4f, barHeight + 2f),
+                        cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
+                        alpha = 0.5f
+                    )
+                }
+            } else {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(x, y),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
+                    alpha = 0.85f
                 )
             }
         }
@@ -241,6 +262,7 @@ private fun smoothBars(newLevels: FloatArray, oldLevels: FloatArray): FloatArray
 @Composable
 fun SubBassWaveVisualizer(
     subBassWave: FloatArray,
+    performanceConfig: PerformanceConfig,
     modifier: Modifier = Modifier
 ) {
     var smoothedWave by remember { mutableStateOf(subBassWave) }
@@ -250,9 +272,10 @@ fun SubBassWaveVisualizer(
         smoothedWave = smoothSubBassWave(subBassWave, smoothedWave)
     }
     
+    val animationDelay = (1000 / performanceConfig.animationFPS).toLong()
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(16)
+            kotlinx.coroutines.delay(animationDelay)
             phase += 0.05f
             if (phase > 2 * kotlin.math.PI) {
                 phase -= (2 * kotlin.math.PI).toFloat()
@@ -269,7 +292,7 @@ fun SubBassWaveVisualizer(
         
         val avgAmplitude = smoothedWave.average().toFloat()
         
-        for (layer in 0 until 3) {
+        for (layer in 0 until performanceConfig.subBassWaveLayers) {
             val path = Path()
             val step = width / smoothedWave.size
             val layerOffset = layer * 15f

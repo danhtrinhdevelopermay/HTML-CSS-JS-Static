@@ -84,6 +84,15 @@ app/src/main/java/com/equalizerfx/app/
   - Smooth bezier curves với phase animation
   - Radial pulse effect khi sub-bass mạnh
   - Real-time FFT processing cho sub-bass frequencies
+- **Performance Optimization** (2025-11-24):
+  - Thêm Performance Mode (LOW/MEDIUM/HIGH) cho thiết bị chip yếu
+  - LOW mode: Tắt sub-bass wave, image pulse, giảm FPS xuống 30, không glow effects
+  - MEDIUM mode: Cân bằng - sub-bass 2 layers, FPS 45, không glow effects
+  - HIGH mode: Full features - sub-bass 3 layers, FPS 60, đầy đủ glow effects
+  - Adaptive visualizer capture rate: 10Hz (LOW), 20Hz (MEDIUM), 30Hz (HIGH)
+  - Giảm waveform data points ở LOW mode (64 vs 128)
+  - Tối ưu FFT processing dựa trên performance mode
+  - User có thể chọn mode phù hợp với thiết bị của họ
 
 ## Ghi chú kỹ thuật
 - Sử dụng Android Audio Framework native (audiofx)

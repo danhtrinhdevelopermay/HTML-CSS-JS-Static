@@ -2,6 +2,7 @@ package com.equalizerfx.app.audio
 
 import android.media.audiofx.Visualizer
 import android.util.Log
+import com.equalizerfx.app.settings.PerformanceConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.log10
@@ -11,6 +12,8 @@ class AudioVisualizer {
     private var visualizer: Visualizer? = null
     private var currentSessionId: Int = -1
     private var currentSamplingRate: Int = 44100
+    private var captureSize: Int = 1024
+    private var captureRate: Int = 30
     
     private val _initializationFailed = MutableStateFlow(false)
     val initializationFailed: StateFlow<Boolean> = _initializationFailed
@@ -33,13 +36,29 @@ class AudioVisualizer {
     private val _subBassWave = MutableStateFlow<FloatArray>(FloatArray(64))
     val subBassWave: StateFlow<FloatArray> = _subBassWave
     
+    private var performanceConfig: PerformanceConfig = PerformanceConfig.forMode(com.equalizerfx.app.settings.PerformanceMode.MEDIUM)
+    
     companion object {
         private const val TAG = "AudioVisualizer"
-        private const val CAPTURE_SIZE = 1024
     }
     
     init {
         
+    }
+    
+    fun updatePerformanceConfig(config: PerformanceConfig) {
+        performanceConfig = config
+        
+        val allowedSizes = intArrayOf(128, 256, 512, 1024, 2048)
+        captureSize = allowedSizes.find { it >= config.visualizerCaptureSize } 
+            ?: allowedSizes.last()
+        
+        captureRate = config.visualizerCaptureRate.coerceAtLeast(1000)
+        
+        if (visualizer != null && currentSessionId != -1) {
+            releaseVisualizer()
+            initializeVisualizer(currentSessionId)
+        }
     }
     
     fun switchSession(sessionId: Int) {
@@ -65,8 +84,11 @@ class AudioVisualizer {
                 Log.w(TAG, "Attempting to attach visualizer to system audio (session 0). This requires root/system permissions.")
             }
             
+            val maxCaptureRate = Visualizer.getMaxCaptureRate()
+            val safeCaptureRate = captureRate.coerceIn(1000, maxCaptureRate)
+            
             visualizer = Visualizer(sessionId).apply {
-                captureSize = CAPTURE_SIZE
+                captureSize = this@AudioVisualizer.captureSize
                 setDataCaptureListener(
                     object : Visualizer.OnDataCaptureListener {
                         override fun onWaveFormDataCapture(
@@ -88,13 +110,13 @@ class AudioVisualizer {
                             fft?.let { processFft(it) }
                         }
                     },
-                    Visualizer.getMaxCaptureRate(),
+                    safeCaptureRate,
                     true,
                     true
                 )
                 enabled = true
             }
-            Log.d(TAG, "Visualizer initialized successfully for session $sessionId")
+            Log.d(TAG, "Visualizer initialized successfully for session $sessionId with captureSize=$captureSize, captureRate=$safeCaptureRate (max=$maxCaptureRate)")
             _initializationFailed.value = false
         } catch (e: SecurityException) {
             Log.e(TAG, "SecurityException: Cannot attach visualizer to session $sessionId. " +
@@ -107,9 +129,31 @@ class AudioVisualizer {
     }
     
     private fun processWaveform(waveform: ByteArray) {
-        val normalized = FloatArray(128)
-        for (i in 0 until 128.coerceAtMost(waveform.size)) {
-            normalized[i] = (waveform[i].toInt() + 128) / 256f
+        if (waveform.isEmpty()) {
+            _waveformData.value = FloatArray(performanceConfig.waveformDataPoints)
+            return
+        }
+        
+        val dataPoints = performanceConfig.waveformDataPoints.coerceIn(1, waveform.size)
+        val normalized = FloatArray(dataPoints)
+        
+        if (dataPoints == 1) {
+            normalized[0] = (waveform[0].toInt() + 128) / 256f
+        } else if (waveform.size <= dataPoints) {
+            for (i in 0 until waveform.size.coerceAtMost(dataPoints)) {
+                normalized[i] = (waveform[i].toInt() + 128) / 256f
+            }
+        } else {
+            for (i in 0 until dataPoints) {
+                val position = i * (waveform.size - 1).toFloat() / (dataPoints - 1)
+                val lowerIndex = position.toInt().coerceIn(0, waveform.size - 1)
+                val upperIndex = (lowerIndex + 1).coerceAtMost(waveform.size - 1)
+                val fraction = position - lowerIndex
+                
+                val lowerValue = (waveform[lowerIndex].toInt() + 128) / 256f
+                val upperValue = (waveform[upperIndex].toInt() + 128) / 256f
+                normalized[i] = lowerValue * (1 - fraction) + upperValue * fraction
+            }
         }
         _waveformData.value = normalized
     }
@@ -145,7 +189,7 @@ class AudioVisualizer {
                 count++
             }
             val avgLevel = if (count > 0) sum / count else 0f
-            bassLevels[i] = (avgLevel * 2.2f).coerceIn(0f, 1f)
+            bassLevels[i] = (avgLevel * performanceConfig.bassLevelBoost).coerceIn(0f, 1f)
         }
         
         val trebleStart = (numBins * 0.5).toInt()
@@ -159,46 +203,48 @@ class AudioVisualizer {
             frequencyBands[i] = (magnitudes[index] * 1.4f).coerceIn(0f, 1f)
         }
         
-        val binFrequency = currentSamplingRate.toFloat() / CAPTURE_SIZE
-        val minSubBassFreq = 20f
-        val maxSubBassFreq = 100f
-        
-        val subBassBins = mutableListOf<Pair<Int, Float>>()
-        for (binIndex in 0 until numBins) {
-            val centerFreq = binIndex * binFrequency
-            if (centerFreq >= minSubBassFreq && centerFreq <= maxSubBassFreq) {
-                subBassBins.add(Pair(binIndex, magnitudes[binIndex]))
+        if (performanceConfig.enableSubBassWave) {
+            val binFrequency = currentSamplingRate.toFloat() / captureSize
+            val minSubBassFreq = 20f
+            val maxSubBassFreq = 100f
+            
+            val subBassBins = mutableListOf<Pair<Int, Float>>()
+            for (binIndex in 0 until numBins) {
+                val centerFreq = binIndex * binFrequency
+                if (centerFreq >= minSubBassFreq && centerFreq <= maxSubBassFreq) {
+                    subBassBins.add(Pair(binIndex, magnitudes[binIndex]))
+                }
             }
-        }
-        
-        if (subBassBins.isEmpty()) {
-            val fallbackBin = kotlin.math.min(1, magnitudes.size - 1)
-            for (i in 0 until 64) {
-                subBassWave[i] = (magnitudes[fallbackBin] * 3.0f).coerceIn(0f, 1f)
+            
+            if (subBassBins.isEmpty()) {
+                val fallbackBin = kotlin.math.min(1, magnitudes.size - 1)
+                for (i in 0 until 64) {
+                    subBassWave[i] = (magnitudes[fallbackBin] * 3.0f).coerceIn(0f, 1f)
+                }
+            } else if (subBassBins.size == 1) {
+                val magnitude = subBassBins[0].second
+                for (i in 0 until 64) {
+                    subBassWave[i] = (magnitude * 3.0f).coerceIn(0f, 1f)
+                }
+            } else {
+                for (i in 0 until 64) {
+                    val position = i * (subBassBins.size - 1) / 63.0
+                    val lowerIndex = position.toInt().coerceIn(0, subBassBins.size - 1)
+                    val upperIndex = (lowerIndex + 1).coerceAtMost(subBassBins.size - 1)
+                    val fraction = (position - lowerIndex).toFloat()
+                    
+                    val interpolatedMagnitude = subBassBins[lowerIndex].second * (1 - fraction) + 
+                                               subBassBins[upperIndex].second * fraction
+                    subBassWave[i] = (interpolatedMagnitude * 3.0f).coerceIn(0f, 1f)
+                }
             }
-        } else if (subBassBins.size == 1) {
-            val magnitude = subBassBins[0].second
-            for (i in 0 until 64) {
-                subBassWave[i] = (magnitude * 3.0f).coerceIn(0f, 1f)
-            }
-        } else {
-            for (i in 0 until 64) {
-                val position = i * (subBassBins.size - 1) / 63.0
-                val lowerIndex = position.toInt().coerceIn(0, subBassBins.size - 1)
-                val upperIndex = (lowerIndex + 1).coerceAtMost(subBassBins.size - 1)
-                val fraction = (position - lowerIndex).toFloat()
-                
-                val interpolatedMagnitude = subBassBins[lowerIndex].second * (1 - fraction) + 
-                                           subBassBins[upperIndex].second * fraction
-                subBassWave[i] = (interpolatedMagnitude * 3.0f).coerceIn(0f, 1f)
-            }
+            _subBassWave.value = subBassWave
         }
         
         _fftData.value = magnitudes
         _bassLevels.value = bassLevels
         _trebleLevels.value = trebleLevels
         _frequencyBands.value = frequencyBands
-        _subBassWave.value = subBassWave
     }
     
     private fun releaseVisualizer() {
