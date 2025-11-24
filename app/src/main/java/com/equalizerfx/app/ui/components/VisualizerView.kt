@@ -1,5 +1,6 @@
 package com.equalizerfx.app.ui.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -7,14 +8,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 
 @Composable
 fun VisualizerView(
@@ -97,29 +97,61 @@ fun WaveformVisualizer(
     waveformData: FloatArray,
     modifier: Modifier = Modifier
 ) {
+    var smoothedData by remember { mutableStateOf(waveformData) }
+    
+    LaunchedEffect(waveformData) {
+        smoothedData = smoothWaveform(waveformData, smoothedData)
+    }
+    
     Canvas(modifier = modifier.background(Color(0xFF0A0A0A))) {
-        if (waveformData.isEmpty()) return@Canvas
+        if (smoothedData.isEmpty()) return@Canvas
         
         val width = size.width
         val height = size.height
         val centerY = height / 2
         
         val path = Path()
-        val step = width / waveformData.size
+        val step = width / smoothedData.size
         
         path.moveTo(0f, centerY)
         
-        for (i in waveformData.indices) {
+        for (i in smoothedData.indices) {
             val x = i * step
-            val y = centerY + (waveformData[i] - 0.5f) * height
-            path.lineTo(x, y)
+            val y = centerY + (smoothedData[i] - 0.5f) * height * 1.8f
+            
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                val prevX = (i - 1) * step
+                val prevY = centerY + (smoothedData[i - 1] - 0.5f) * height * 1.8f
+                val controlX = (prevX + x) / 2
+                path.quadraticBezierTo(controlX, prevY, x, y)
+            }
         }
         
         drawPath(
             path = path,
-            color = Color(0xFF6200EE),
-            alpha = 0.8f
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF6200EE),
+                    Color(0xFF03DAC6),
+                    Color(0xFF6200EE)
+                )
+            ),
+            style = Stroke(width = 3f),
+            alpha = 0.9f
         )
+    }
+}
+
+private fun smoothWaveform(newData: FloatArray, oldData: FloatArray): FloatArray {
+    val smoothFactor = 0.3f
+    return FloatArray(newData.size) { i ->
+        if (i < oldData.size) {
+            oldData[i] + (newData[i] - oldData[i]) * smoothFactor
+        } else {
+            newData[i]
+        }
     }
 }
 
@@ -129,25 +161,63 @@ fun BarsVisualizer(
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    var smoothedLevels by remember { mutableStateOf(levels) }
+    
+    LaunchedEffect(levels) {
+        smoothedLevels = smoothBars(levels, smoothedLevels)
+    }
+    
     Canvas(modifier = modifier.background(Color(0xFF0A0A0A))) {
-        if (levels.isEmpty()) return@Canvas
+        if (smoothedLevels.isEmpty()) return@Canvas
         
         val width = size.width
         val height = size.height
-        val barWidth = (width / levels.size) * 0.8f
-        val spacing = (width / levels.size) * 0.2f
+        val barWidth = (width / smoothedLevels.size) * 0.75f
+        val spacing = (width / smoothedLevels.size) * 0.25f
         
-        for (i in levels.indices) {
-            val barHeight = levels[i] * height
+        for (i in smoothedLevels.indices) {
+            val barHeight = (smoothedLevels[i] * height * 1.5f).coerceAtMost(height)
             val x = i * (barWidth + spacing)
             val y = height - barHeight
             
-            drawRect(
-                color = color,
+            val gradient = Brush.verticalGradient(
+                colors = listOf(
+                    color.copy(alpha = 1f),
+                    color.copy(alpha = 0.6f),
+                    color.copy(alpha = 0.3f)
+                ),
+                startY = y,
+                endY = height
+            )
+            
+            drawRoundRect(
+                brush = gradient,
                 topLeft = Offset(x, y),
                 size = Size(barWidth, barHeight),
-                alpha = 0.8f
+                cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
+                alpha = 0.95f
             )
+            
+            if (smoothedLevels[i] > 0.6f) {
+                drawRoundRect(
+                    color = color.copy(alpha = 0.3f),
+                    topLeft = Offset(x - 2f, y - 2f),
+                    size = Size(barWidth + 4f, barHeight + 2f),
+                    cornerRadius = CornerRadius(barWidth / 4, barWidth / 4),
+                    alpha = 0.5f
+                )
+            }
+        }
+    }
+}
+
+private fun smoothBars(newLevels: FloatArray, oldLevels: FloatArray): FloatArray {
+    val smoothFactor = 0.4f
+    return FloatArray(newLevels.size) { i ->
+        if (i < oldLevels.size) {
+            oldLevels[i] + (newLevels[i] - oldLevels[i]) * smoothFactor
+        } else {
+            newLevels[i]
         }
     }
 }

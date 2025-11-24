@@ -153,11 +153,21 @@ fun MainScreen(
     val trebleLevels by audioVisualizer.trebleLevels.collectAsState()
     val frequencyBands by audioVisualizer.frequencyBands.collectAsState()
     
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             mediaPlayerManager.loadFile(it)
+        }
+    }
+    
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            selectedImageUri = it
         }
     }
     
@@ -227,6 +237,14 @@ fun MainScreen(
                 bassLevels = bassLevels,
                 trebleLevels = trebleLevels,
                 frequencyBands = frequencyBands
+            )
+            
+            ImagePulseVisualizer(
+                bassLevels = bassLevels,
+                selectedImageUri = selectedImageUri,
+                onSelectImage = {
+                    imagePickerLauncher.launch("image/*")
+                }
             )
             
             EffectsControls(

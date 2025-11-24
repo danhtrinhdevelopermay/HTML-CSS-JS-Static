@@ -126,18 +126,26 @@ class AudioVisualizer {
         }
         
         for (i in 0 until 10) {
-            val index = (i * 12.8).toInt().coerceIn(0, 127)
-            bassLevels[i] = magnitudes[index]
+            val startIndex = (i * 6).coerceIn(0, 127)
+            val endIndex = ((i + 1) * 6).coerceIn(0, 127)
+            var sum = 0f
+            var count = 0
+            for (j in startIndex until endIndex) {
+                sum += magnitudes[j]
+                count++
+            }
+            val avgLevel = if (count > 0) sum / count else 0f
+            bassLevels[i] = (avgLevel * 2.2f).coerceIn(0f, 1f)
         }
         
         for (i in 0 until 10) {
             val index = (64 + i * 6.4).toInt().coerceIn(0, 127)
-            trebleLevels[i] = magnitudes[index]
+            trebleLevels[i] = (magnitudes[index] * 1.3f).coerceIn(0f, 1f)
         }
         
         for (i in 0 until 20) {
             val index = (i * 6.4).toInt().coerceIn(0, 127)
-            frequencyBands[i] = magnitudes[index]
+            frequencyBands[i] = (magnitudes[index] * 1.4f).coerceIn(0f, 1f)
         }
         
         _fftData.value = magnitudes
